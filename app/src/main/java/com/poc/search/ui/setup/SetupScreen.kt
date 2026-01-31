@@ -28,9 +28,16 @@ fun SetupScreen(
     onTestHealth: () -> Unit,
     onClearMessage: () -> Unit
 ) {
+    // 초기 위치를 /sdcard/Download 폴더로 제안
+    val initialUri = remember {
+        Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload")
+    }
+
     val incomingLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri -> if (uri != null) onPickIncoming(uri) }
+    ) { uri ->
+        uri?.let { onPickIncoming(it) }
+    }
 
     val referenceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -64,17 +71,17 @@ fun SetupScreen(
         FolderRow(
             label = "Incoming 폴더(약 2,000장)",
             uri = uiState.incomingRoot,
-            onPick = { incomingLauncher.launch(null) }
+            onPick = { incomingLauncher.launch(initialUri) }
         )
         FolderRow(
             label = "Reference 폴더(dogId별 하위폴더)",
             uri = uiState.referenceRoot,
-            onPick = { referenceLauncher.launch(null) }
+            onPick = { referenceLauncher.launch(initialUri) }
         )
         FolderRow(
             label = "Output 폴더(Export 대상)",
             uri = uiState.outputRoot,
-            onPick = { outputLauncher.launch(null) }
+            onPick = { outputLauncher.launch(initialUri) }
         )
 
         Divider()

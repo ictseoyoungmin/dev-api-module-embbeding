@@ -1,7 +1,11 @@
 package com.poc.search
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -19,10 +23,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        checkAllFilesAccess()
+
         setContent {
             Surface(color = MaterialTheme.colorScheme.background) {
-
-                // ✅ 여기만 핵심 수정: collectAsState는 확장 함수로 호출
                 val ui = vm.state.collectAsState().value
 
                 when {
@@ -47,9 +51,9 @@ class MainActivity : ComponentActivity() {
                         onSetThreshold = vm::setThreshold,
                         onSetBatchSize = vm::setBatchSize,
                         onSetFormat = vm::setFormat,
-                        onPickIncoming = { uri -> takePersistable(uri); vm.setIncomingRoot(uri) },
-                        onPickReference = { uri -> takePersistable(uri); vm.setReferenceRoot(uri) },
-                        onPickOutput = { uri -> takePersistable(uri); vm.setOutputRoot(uri) },
+                        onPickIncoming = { uri -> vm.setIncomingRoot(uri) },
+                        onPickReference = { uri -> vm.setReferenceRoot(uri) },
+                        onPickOutput = { uri -> vm.setOutputRoot(uri) },
                         onStart = { vm.start() },
                         onTestHealth = { vm.testHealth() },
                         onClearMessage = { vm.clearMessage() }
@@ -59,12 +63,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun takePersistable(uri: android.net.Uri) {
-        try {
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            contentResolver.takePersistableUriPermission(uri, flags)
-        } catch (_: SecurityException) {
-            // 일부 기기/상황에서 persist 실패 가능(현재 세션 접근은 보통 가능)
+    private fun checkAllFilesAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:${packageName}")
+                startActivity(intent)
+            }
         }
     }
 }

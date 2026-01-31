@@ -11,6 +11,7 @@ import com.poc.search.data.file.Exporter
 import com.poc.search.domain.Classifier
 import com.poc.search.domain.PrototypeBuilder
 import com.poc.search.domain.SessionEngine
+import com.poc.search.domain.VectorMath
 import com.poc.search.model.PhotoItem
 import com.poc.search.model.Progress
 import com.poc.search.model.ResponseFormat
@@ -21,12 +22,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class UiState(
-    val baseUrl: String = "http://<SERVER_IP>:8000",
-    val incomingRoot: Uri? = null,
-    val referenceRoot: Uri? = null,
-    val outputRoot: Uri? = null,
+    val baseUrl: String = "http://10.0.2.2:8000",
+    val incomingRoot: Uri? = Uri.fromFile(File("/sdcard/Download/images")),
+    val referenceRoot: Uri? = Uri.fromFile(File("/sdcard/Download/PetPoC/ref")),
+    val outputRoot: Uri? = Uri.fromFile(File("/sdcard/Download/PetPoC/outputs")),
     val topK: Int = 5,
     val threshold: Float = 0.42f,
     val batchSize: Int = 16,
@@ -34,7 +36,8 @@ data class UiState(
 
     val progress: Progress? = null,
     val grouped: Map<String, List<PhotoItem>>? = null,
-    val message: String? = null
+    val message: String? = null,
+    val searchResults: List<PhotoItem>? = null // 검색(정렬) 결과용 필드 추가
 )
 
 class SessionViewModel(app: Application) : AndroidViewModel(app) {
@@ -62,12 +65,27 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun reset() {
         job?.cancel()
-        _state.update { it.copy(progress = null, grouped = null, message = null) }
+        _state.update { it.copy(progress = null, grouped = null, message = null, searchResults = null) }
     }
 
     fun cancel() {
         job?.cancel()
         _state.update { it.copy(progress = null, message = "Cancelled") }
+    }
+
+    // ✅ 시나리오의 핵심: 특정 사진을 기준으로 유사도 정렬
+    fun searchByPhoto(targetPhoto: PhotoItem) {
+        val grouped = _state.value.grouped ?: return
+        val targetVector = targetPhoto.assignment.vector ?: return
+        
+        // 모든 그룹의 사진들을 하나로 합쳐서 유사도 순으로 정렬
+        val allPhotos = grouped.values.flatten()
+        val sorted = allPhotos.map { photo ->
+            val score = photo.assignment.vector?.let { VectorMath.cosineSimilarity(targetVector, it) } ?: 0f
+            photo.copy(tempScore = score) // 임시 점수 부여
+        }.sortedByDescending { it.tempScore }
+
+        _state.update { it.copy(searchResults = sorted, message = "유사도 순으로 정렬되었습니다.") }
     }
 
     fun testHealth() {
@@ -90,11 +108,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         val output = s.outputRoot
 
         if (incoming == null || reference == null || output == null) {
-            _state.update { it.copy(message = "폴더(incoming/reference/output)를 모두 선택하세요.") }
-            return
-        }
-        if (!s.baseUrl.startsWith("http")) {
-            _state.update { it.copy(message = "서버 URL이 올바르지 않습니다.") }
+            _state.update { it.copy(message = "폴더를 모두 선택하세요.") }
             return
         }
 
@@ -112,7 +126,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         job?.cancel()
         job = viewModelScope.launch {
             try {
-                _state.update { it.copy(grouped = null, progress = Progress.Scanning(0), message = null) }
+                _state.update { it.copy(grouped = null, searchResults = null, progress = Progress.Scanning(0), message = null) }
 
                 val api = DogfaceApiClient(cfg.baseUrl, context.contentResolver, okHttp)
                 val engine = SessionEngine(
@@ -126,13 +140,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(progress = p) }
                 }
 
-                // 빈 그룹 제거(Unknown 제외)
-                val cleaned = grouped
-                    .mapValues { it.value.toMutableList() }
-                    .toMutableMap()
-                cleaned.entries.removeIf { (k, v) -> k != UNKNOWN_KEY && v.isEmpty() }
-
-                _state.update { it.copy(progress = null, grouped = cleaned) }
+                _state.update { it.copy(progress = null, grouped = grouped) }
             } catch (e: Exception) {
                 _state.update { it.copy(progress = null, message = "실패: ${e.message}") }
             }
@@ -144,13 +152,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         val mutable = grouped.mapValues { it.value.toMutableList() }.toMutableMap()
 
         var moved: PhotoItem? = null
-        var oldKey: String? = null
-
         for ((k, list) in mutable) {
             val idx = list.indexOfFirst { it.uri == photoUri }
             if (idx >= 0) {
                 moved = list.removeAt(idx)
-                oldKey = k
                 break
             }
         }
@@ -161,8 +166,6 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             assignment = moved.assignment.copy(bestDogId = newDogIdOrNull)
         )
         mutable.getOrPut(newKey) { mutableListOf() }.add(updated)
-
-        // 빈 그룹 제거(Unknown 제외)
         mutable.entries.removeIf { (k, v) -> k != UNKNOWN_KEY && v.isEmpty() }
 
         _state.update { it.copy(grouped = mutable) }

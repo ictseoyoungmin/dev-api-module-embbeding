@@ -32,12 +32,14 @@ data class Candidate(val dogId: String, val score: Float)
 data class Assignment(
     val bestDogId: String?,   // null이면 Unknown
     val bestScore: Float,
-    val top: List<Candidate>
+    val top: List<Candidate>,
+    val vector: FloatArray? = null // 원본 벡터 보관용 추가
 )
 
 data class PhotoItem(
     val uri: Uri,
-    val assignment: Assignment
+    val assignment: Assignment,
+    val tempScore: Float = 0f // 검색 시 임시 점수 보관용 추가
 )
 
 sealed interface Progress {

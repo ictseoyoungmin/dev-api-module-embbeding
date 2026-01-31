@@ -11,6 +11,14 @@ object VectorMath {
         for (i in v.indices) v[i] *= inv
     }
 
+    fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        var dot = 0f
+        for (i in a.indices) {
+            dot += a[i] * b[i]
+        }
+        return dot // 이미 L2 normalize 되어 있다고 가정
+    }
+
     fun meanOfRows(rowMajor: FloatArray, n: Int, d: Int): FloatArray {
         val out = FloatArray(d)
         for (i in 0 until n) {
