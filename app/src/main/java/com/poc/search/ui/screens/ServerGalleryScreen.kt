@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +23,10 @@ fun ServerGalleryScreen(
 ) {
     val ui = vm.ui.collectAsState().value
     val items = vm.serverImages.collectAsState().value
+
+    // ✅ 정렬용 ID 입력 다이얼로그 상태
+    var showSearchDialog by remember { mutableStateOf(false) }
+    var searchIdInput by remember { mutableStateOf("") }
 
     LaunchedEffect(ui.baseUrl, ui.daycareId) {
         if (items.isEmpty()) {
@@ -53,7 +55,7 @@ fun ServerGalleryScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
-                    onClick = { vm.searchAndSortServer() },
+                    onClick = { showSearchDialog = true },
                     enabled = ui.exemplarInstanceIds.isNotEmpty()
                 ) {
                     Text("RRF 정렬(대표샷 ${ui.exemplarInstanceIds.size})")
@@ -82,6 +84,34 @@ fun ServerGalleryScreen(
                 ServerGalleryItem(item = item, onClick = { onOpenDetail(item.imageId) })
             }
         }
+    }
+
+    // ✅ RRF 정렬용 ID 입력 다이얼로그 (Subbox)
+    if (showSearchDialog) {
+        AlertDialog(
+            onDismissRequest = { showSearchDialog = false },
+            title = { Text("정렬할 이름을 입력하세요") },
+            text = {
+                OutlinedTextField(
+                    value = searchIdInput,
+                    onValueChange = { searchIdInput = it },
+                    label = { Text("예: 뽀미, 윌터") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (searchIdInput.isNotBlank()) {
+                        vm.searchAndSortServer(searchIdInput.trim())
+                        showSearchDialog = false
+                    }
+                }) { Text("정렬 시작") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSearchDialog = false }) { Text("취소") }
+            }
+        )
     }
 }
 

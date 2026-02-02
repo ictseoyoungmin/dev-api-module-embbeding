@@ -27,6 +27,10 @@ fun DetailScreen(
         vm.selectLocalUri(localUri)
     }
 
+    // ✅ 정렬용 ID 입력 다이얼로그 상태
+    var showSearchDialog by remember { mutableStateOf(false) }
+    var searchIdInput by remember { mutableStateOf("") }
+
     val (showLabelDialog, setShowLabelDialog) = remember { mutableStateOf(false) }
     val (petIdInput, setPetIdInput) = remember { mutableStateOf("") }
 
@@ -79,15 +83,11 @@ fun DetailScreen(
                     Text("Upload & Detect")
                 }
                 
-                // ✅ 클릭이 안 되는 문제를 해결하기 위해 조건을 완화하거나 안내 추가
                 Button(
                     onClick = { 
-                        if (ui.selectedInstanceId != null || ui.exemplarInstanceIds.isNotEmpty()) {
-                            vm.searchAndSort()
-                            onBack() 
-                        }
+                        // ✅ 바로 정렬하지 않고 ID 입력창을 띄움
+                        showSearchDialog = true
                     },
-                    // 개체가 선택되었거나 이미 대표샷이 있을 때만 활성화
                     enabled = ui.selectedInstanceId != null || ui.exemplarInstanceIds.isNotEmpty(),
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -116,21 +116,43 @@ fun DetailScreen(
                 }
             }
 
-            // ✅ 안내 메시지 강화
             if (ui.selectedInstanceId == null && ui.exemplarInstanceIds.isEmpty()) {
                 Text(
                     "💡 정렬하려면 사진의 개체(박스)를 먼저 탭하세요.",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
-            } else if (ui.selectedInstanceId != null) {
-                Text(
-                    "✅ 개체가 선택되었습니다. [RRF 정렬]을 누르세요.",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall
-                )
             }
         }
+    }
+
+    // ✅ RRF 정렬용 ID 입력 Subbox (다이얼로그)
+    if (showSearchDialog) {
+        AlertDialog(
+            onDismissRequest = { showSearchDialog = false },
+            title = { Text("정렬할 이름을 입력하세요") },
+            text = {
+                OutlinedTextField(
+                    value = searchIdInput,
+                    onValueChange = { searchIdInput = it },
+                    label = { Text("예: 뽀미, 윌터") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (searchIdInput.isNotBlank()) {
+                        vm.searchAndSort(searchIdInput.trim())
+                        showSearchDialog = false
+                        onBack() // 정렬 시작 후 리스트로 이동
+                    }
+                }) { Text("정렬 시작") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSearchDialog = false }) { Text("취소") }
+            }
+        )
     }
 
     if (showLabelDialog) {
